@@ -1,9 +1,9 @@
 # LLM
 Building a simple LLM by hand just for fun
 
-transformer-from-scratch//
-├── model//
-│   ├── __init__.py/
+transformer-from-scratch/\
+├── model/\
+│   ├── __init__.py\
 │   ├── attention.py       # Attention mechanisms
 │   ├── embedding.py       # Token and positional embeddings
 │   ├── encoder.py         # Transformer encoder blocks
