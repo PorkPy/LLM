@@ -4,6 +4,7 @@ import torch
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd  # Add this import
 from model.transformer import SimpleTransformer
 from training.tokenizer import SimpleTokenizer
 from utils.visualization import plot_attention_heads, visualize_model_attention
@@ -31,7 +32,7 @@ def load_model(checkpoint_path, tokenizer_path, device):
         n_layers=4,
         n_heads=8,
         d_ff=1024,
-        max_seq_length=128,  # Match the sequence length used in training (128)
+        max_seq_length=128,  # Match the sequence length used in training
         dropout=0.1
     )
     
@@ -100,7 +101,7 @@ def main():
                                   help="Higher values produce more diverse text, lower values are more deterministic")
     top_k = st.sidebar.slider("Top-k", min_value=1, max_value=100, value=50, step=1,
                             help="Sample from top k most probable tokens")
-    max_length = st.sidebar.slider("Max Length", min_value=10, max_value=200, value=50, step=10,
+    max_length = st.sidebar.slider("Max Length", min_value=10, max_value=100, value=50, step=10,
                                  help="Maximum number of tokens to generate")
     
     # Visualization settings
@@ -116,7 +117,7 @@ def main():
         head_idx = None
     
     # Main content
-    tabs = st.tabs(["Text Generation", "Attention Visualization", "Model Architecture"])
+    tabs = st.tabs(["Text Generation", "Attention Visualization", "Model Architecture", "Diagnostics"])
     
     # Text Generation Tab
     with tabs[0]:
@@ -130,18 +131,41 @@ def main():
                 input_ids = tokenizer.encode(prompt)
                 input_tensor = torch.tensor([input_ids]).to(device)
                 
-                # Generate text
+                # Generate text with UNK blocking
                 with torch.no_grad():
-                    output_ids = model.generate(
-                        input_tensor,
-                        max_length=max_length,
-                        temperature=temperature,
-                        top_k=top_k,
-                        tokenizer=tokenizer
-                    )
-                
-                # Decode generated text
-                generated_text = tokenizer.decode(output_ids)
+                    # Start with the input tensor
+                    output_tensor = input_tensor.clone()
+                    
+                    # Generate tokens one by one
+                    for _ in range(max_length):
+                        # Get model predictions
+                        logits, _ = model(output_tensor)
+                        
+                        # Get logits for the last token
+                        next_token_logits = logits[0, -1, :].clone()
+                        
+                        # Block UNK token
+                        next_token_logits[tokenizer.unk_token_id] = -float('inf')
+                        
+                        # Apply temperature
+                        next_token_logits = next_token_logits / temperature
+                        
+                        # Apply top-k filtering
+                        if top_k > 0:
+                            # Zero out all values below the top-k
+                            values, _ = torch.topk(next_token_logits, top_k)
+                            min_value = values[-1]
+                            next_token_logits[next_token_logits < min_value] = -float('inf')
+                        
+                        # Sample from the filtered distribution
+                        probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+                        next_token = torch.multinomial(probs, 1).unsqueeze(0)
+                        
+                        # Add the sampled token to the sequence
+                        output_tensor = torch.cat((output_tensor, next_token), dim=1)
+                    
+                    # Decode generated text
+                    generated_text = tokenizer.decode(output_tensor[0].tolist())
                 
                 # Display result
                 st.subheader("Generated Text")
@@ -252,6 +276,93 @@ def main():
         
         The attention visualization tab shows these attention patterns in action!
         """)
+    
+    # Diagnostics Tab
+    with tabs[3]:
+        st.header("Model Diagnostics")
+        
+        st.subheader("Token Distribution Analysis")
+        
+        diag_prompt = st.text_area("Enter a prompt for diagnostics", "Once upon a time", height=100, key="diag_prompt")
+        
+        if st.button("Analyze Token Distribution"):
+            with st.spinner("Analyzing token distribution..."):
+                # Tokenize prompt
+                input_ids = tokenizer.encode(diag_prompt)
+                input_tensor = torch.tensor([input_ids]).to(device)
+                
+                # Get model predictions
+                with torch.no_grad():
+                    logits, _ = model(input_tensor)
+                    
+                # Get logits for the last token
+                next_token_logits = logits[0, -1, :]
+                
+                # Convert to probabilities
+                probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+                
+                # Get top 20 tokens
+                top_k = 20
+                top_probs, top_indices = torch.topk(probs, top_k)
+                
+                # Display results
+                results = []
+                for i in range(top_k):
+                    token_id = top_indices[i].item()
+                    token = tokenizer.idx_to_word.get(token_id, f"<ID:{token_id}>")
+                    prob = top_probs[i].item()
+                    results.append({"Token": token, "ID": token_id, "Probability": f"{prob:.6f}"})
+                
+                st.write(pd.DataFrame(results))
+                
+                # Check for UNK concentration
+                unk_prob = probs[tokenizer.unk_token_id].item()
+                st.write(f"UNK token probability: {unk_prob:.6f}")
+                st.write(f"Sum of top {top_k} token probabilities: {sum(top_probs.tolist()):.6f}")
+                st.write(f"Sum of all probabilities: {sum(probs.tolist()):.6f}")
+                
+                # Visualize token probability distribution
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                # Sort probabilities
+                sorted_probs, _ = torch.sort(probs, descending=True)
+                sorted_probs = sorted_probs[:100].cpu().numpy()  # Show top 100 for better visualization
+                
+                # Plot distribution
+                ax.plot(range(len(sorted_probs)), sorted_probs)
+                ax.set_xlabel('Token Rank')
+                ax.set_ylabel('Probability')
+                ax.set_title('Token Probability Distribution (Top 100 Tokens)')
+                ax.set_yscale('log')
+                ax.grid(True)
+                
+                st.pyplot(fig)
+                
+                # Test generation with forced non-UNK
+                st.subheader("Test Generation (Forced non-UNK)")
+                with torch.no_grad():
+                    # Get next token logits
+                    next_token_logits = logits[0, -1, :].clone()
+                    
+                    # Block UNK token
+                    next_token_logits[tokenizer.unk_token_id] = -float('inf')
+                    
+                    # Apply temperature
+                    next_token_logits = next_token_logits / temperature
+                    
+                    # Convert to probabilities
+                    probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+                    
+                    # Sample tokens
+                    num_samples = 10
+                    sampled_tokens = []
+                    
+                    for _ in range(num_samples):
+                        next_token = torch.multinomial(probs, 1).item()
+                        token = tokenizer.idx_to_word.get(next_token, f"<ID:{next_token}>")
+                        sampled_tokens.append(token)
+                    
+                    st.write(f"Next 10 sampled tokens with UNK blocked: {', '.join(sampled_tokens)}")
 
 if __name__ == "__main__":
     main()
