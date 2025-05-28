@@ -83,22 +83,27 @@ class MultiHeadAttention(nn.Module):
             attention: torch.Tensor (batch_size, n_heads, seq_length, seq_length)
         """
         batch_size = q.size(0)
+        seq_length = q.size(1)
         residual = q
         
         # Linear projections and split into n_heads
-        q = self.w_q(q).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
+        q = self.w_q(q).view(batch_size, seq_length, self.n_heads, self.d_k).transpose(1, 2)
         k = self.w_k(k).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         v = self.w_v(v).view(batch_size, -1, self.n_heads, self.d_v).transpose(1, 2)
         
         # Adjust mask dimensions for multi-head attention
         if mask is not None:
-            mask = mask.unsqueeze(1)  # (batch_size, 1, seq_length) or (batch_size, 1, seq_length, seq_length)
+            # Ensure mask has the right shape for multi-head attention
+            if mask.dim() == 3:  # (batch_size, 1, seq_length)
+                mask = mask.unsqueeze(1)  # (batch_size, 1, 1, seq_length)
+            elif mask.dim() == 2:  # (batch_size, seq_length)
+                mask = mask.unsqueeze(1).unsqueeze(1)  # (batch_size, 1, 1, seq_length)
         
         # Apply scaled dot product attention
         output, attention = self.attention(q, k, v, mask)
         
         # Concatenate heads and apply final linear projection
-        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        output = output.transpose(1, 2).contiguous().view(batch_size, seq_length, self.d_model)
         output = self.fc(output)
         output = self.dropout(output)
         
