@@ -1,0 +1,117 @@
+# .gitignore
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.c
+*.html
+
+# C extensions and Cython generated files
+*.so
+*.pyd
+*.dll
+*.o
+*.obj
+*.a
+*.lib
+*.exp
+*.out
+*.exe
+.c
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# Environment directories
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyTorch specific
+*.pt
+*.pth
+*.tar
+*.pkl
+checkpoint/
+checkpoints/
+runs/
+
+# Streamlit
+.streamlit/
+
+# Model specific
+*.json
+
+# Data files
+.cache/
+data/
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.zip
+*.gzip
+*.parquet
+*.feather
+*.db
+*.sqlite
+*.h5
+*.hdf5
+
+# Logs
+logs/
+*.log
+wandb/
+
+# OS specific
+.DS_Store
+Thumbs.db
