@@ -24,13 +24,15 @@ def load_model(checkpoint_path, tokenizer_path, device):
     # Load tokenizer
     tokenizer = SimpleTokenizer.load(tokenizer_path)
     
-    # Create model
+    # Create model with the SAME parameters as during training
     model = SimpleTransformer(
         vocab_size=len(tokenizer.word_to_idx),
-        d_model=256,  # These should match the trained model's config
+        d_model=256,
         n_layers=4,
         n_heads=8,
-        d_ff=1024
+        d_ff=1024,
+        max_seq_length=128,  # Match the sequence length used in training (128)
+        dropout=0.1
     )
     
     # Load checkpoint
